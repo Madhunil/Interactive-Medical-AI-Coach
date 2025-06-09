@@ -1,0 +1,8 @@
+# Python
+__pycache__/
+
+audio_recordings/
+
+# Environment variables
+.env
+med_ai_coach_env/
