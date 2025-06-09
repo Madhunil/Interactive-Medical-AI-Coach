@@ -1,22 +1,67 @@
-import requests
+import boto3
 import json
 import os
 from datetime import datetime
 import streamlit as st
-from .audio_processor import AudioProcessor
+from dotenv import load_dotenv
 
 class MedicalRAGProcessor:
     def __init__(self):
-        """Initialize Medical RAG processor with AWS integration"""
+        """Initialize Medical RAG processor with explicit AWS credentials"""
         
-        # AWS Configuration (reuse existing WonderScribe infrastructure)
-        self.aws_api_url = "https://wacnqhon34.execute-api.us-east-1.amazonaws.com/dev/"
-        self.headers = {"Content-Type": "application/json"}
+        # Load environment variables
+        load_dotenv()
         
-        # Initialize audio processor
-        self.audio_processor = AudioProcessor()
+        # Get AWS credentials from environment
+        self.aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+        self.aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        self.aws_region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
         
-        # Emergency keywords for safety
+        # Validate credentials exist
+        if not self.aws_access_key_id or not self.aws_secret_access_key:
+            st.error("❌ AWS credentials not found in .env file!")
+            st.error("Please check your .env file has AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
+            self.bedrock_client = None
+            self.bedrock_agent_client = None
+            self.s3_client = None
+            return
+        
+        # Initialize AWS clients with explicit credentials
+        try:
+            self.bedrock_client = boto3.client(
+                'bedrock-runtime',
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+                region_name=self.aws_region
+            )
+            
+            self.bedrock_agent_client = boto3.client(
+                'bedrock-agent-runtime',
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+                region_name=self.aws_region
+            )
+            
+            self.s3_client = boto3.client(
+                's3',
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+                region_name=self.aws_region
+            )
+            
+            print("✅ AWS RAG clients initialized successfully")
+            
+        except Exception as e:
+            st.error(f"❌ Failed to initialize AWS clients: {str(e)}")
+            self.bedrock_client = None
+            self.bedrock_agent_client = None
+            self.s3_client = None
+        
+        # Configuration
+        self.knowledge_base_id = os.getenv('KNOWLEDGE_BASE_ID', 'BDHRZZXGMQ')
+        self.model_id = os.getenv('BEDROCK_MODEL_ID', 'anthropic.claude-3-haiku-20240307-v1:0')
+        
+        # Emergency keywords
         self.emergency_keywords = [
             'chest pain', 'heart attack', 'stroke', 'difficulty breathing',
             'severe bleeding', 'loss of consciousness', 'overdose',
@@ -36,10 +81,102 @@ class MedicalRAGProcessor:
             }
         return {'is_emergency': False}
     
-    def process_medical_query(self, query, include_audio=True):
-        """Process medical query using existing AWS infrastructure"""
+    def retrieve_medical_context(self, query, max_results=5):
+        """Retrieve context from knowledge base"""
+        
+        if not self.bedrock_agent_client:
+            raise Exception("Bedrock Agent client not initialized. Check AWS credentials.")
+        
         try:
-            # Check for emergency keywords first
+            response = self.bedrock_agent_client.retrieve(
+                retrievalQuery={'text': query},
+                knowledgeBaseId=self.knowledge_base_id,
+                retrievalConfiguration={
+                    'vectorSearchConfiguration': {
+                        'numberOfResults': max_results
+                    }
+                }
+            )
+            
+            retrieval_results = response.get('retrievalResults', [])
+            contexts = []
+            
+            for result in retrieval_results:
+                if 'content' in result and 'text' in result['content']:
+                    contexts.append(result['content']['text'])
+            
+            return contexts
+            
+        except Exception as e:
+            error_msg = f"Error retrieving medical context: {str(e)}"
+            st.error(error_msg)
+            raise Exception(error_msg)
+    
+    def generate_medical_response(self, query, contexts):
+        """Generate medical response using Bedrock"""
+        
+        if not self.bedrock_client:
+            raise Exception("Bedrock client not initialized. Check AWS credentials.")
+        
+        try:
+            # Create medical prompt with context
+            context_text = "\n\n".join(contexts) if contexts else "No specific context available."
+            
+            medical_prompt = f"""
+            You are a medical AI assistant providing evidence-based health information.
+            
+            IMPORTANT GUIDELINES:
+            - Provide general health information only
+            - Always recommend consulting healthcare professionals
+            - Never provide definitive diagnoses
+            - Use cautious, informative language
+            - Include appropriate medical disclaimers
+            
+            Medical Knowledge Context:
+            {context_text}
+            
+            Patient Question: {query}
+            
+            Please provide helpful, evidence-based information while emphasizing the need for professional medical consultation.
+            """
+            
+            messages = [{"role": "user", "content": [{"type": "text", "text": medical_prompt}]}]
+            
+            payload = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "messages": messages,
+                "temperature": 0.3,
+                "top_p": 0.9
+            }
+            
+            response = self.bedrock_client.invoke_model(
+                body=json.dumps(payload),
+                modelId=self.model_id,
+                accept='application/json',
+                contentType='application/json'
+            )
+            
+            response_body = json.loads(response.get('body').read())
+            medical_response = response_body.get('content')[0]['text']
+            
+            # Add medical disclaimer
+            disclaimer = "\n\n⚠️ MEDICAL DISCLAIMER: This information is for educational purposes only. Always consult qualified healthcare professionals for medical advice, diagnosis, or treatment."
+            
+            final_response = medical_response + disclaimer
+            
+            return final_response
+            
+        except Exception as e:
+            error_msg = f"Error generating medical response: {str(e)}"
+            st.error(error_msg)
+            raise Exception(error_msg)
+    
+    def process_medical_query(self, query, include_audio=False):
+        """Process complete medical query"""
+        
+        try:
+            # Check for emergency keywords
             emergency_check = self.detect_emergency_keywords(query)
             if emergency_check['is_emergency']:
                 return {
@@ -51,113 +188,37 @@ class MedicalRAGProcessor:
                     'contexts': []
                 }
             
-            # Prepare payload for existing Lambda function
-            payload = {
-                "api_Path": "getMedicalResponse",  # New endpoint to add to existing Lambda
-                "medical_query": query,
-                "include_audio": include_audio,
-                "user_id": "medical_demo_user",
-                "session_id": str(datetime.now().timestamp())
+            # Retrieve medical context
+            contexts = self.retrieve_medical_context(query)
+            
+            # Generate medical response
+            response = self.generate_medical_response(query, contexts)
+            
+            return {
+                'success': True,
+                'response': response,
+                'confidence': 0.8,
+                'contexts': contexts,
+                'emergency': False
             }
             
-            # Call existing API Gateway endpoint
-            response = requests.post(
-                self.aws_api_url, 
-                headers=self.headers, 
-                json=payload,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Handle emergency response from Lambda
-                if data.get('response_type') == 'emergency':
-                    return {
-                        'success': True,
-                        'response': data.get('message', ''),
-                        'emergency': True,
-                        'confidence': 1.0,
-                        'contexts': []
-                    }
-                
-                # Generate audio response if requested
-                audio_file = None
-                if include_audio and data.get('response'):
-                    audio_file = self.audio_processor.text_to_speech(
-                        data.get('response', '')[:500]  # Limit audio length
-                    )
-                
-                return {
-                    'success': True,
-                    'response': data.get('response', 'No response generated'),
-                    'confidence': data.get('confidence', 0.7),
-                    'contexts': data.get('contexts', []),
-                    'audio_file': audio_file,
-                    'session_id': data.get('session_id'),
-                    'emergency': False
-                }
-            
-            else:
-                # Fallback response if API fails
-                return self._get_fallback_response(query, include_audio)
-                
-        except requests.exceptions.Timeout:
-            st.error("⏱️ Request timed out. Please try again.")
-            return self._get_fallback_response(query, include_audio)
-        
         except Exception as e:
-            st.error(f"❌ Error processing query: {str(e)}")
-            return self._get_fallback_response(query, include_audio)
-    
-    def _get_fallback_response(self, query, include_audio=False):
-        """Provide fallback response when API is unavailable"""
-        fallback_response = f"""
-        I understand you're asking about: "{query}"
-        
-        I'm currently unable to connect to the full medical knowledge base, but I can provide some general guidance:
-        
-        For accurate medical information, please consult with a qualified healthcare professional who can:
-        • Review your specific medical history
-        • Perform appropriate examinations
-        • Provide personalized treatment recommendations
-        
-        If this is urgent, please contact your doctor or visit an emergency room.
-        
-        ⚠️ This system provides general information only and should not replace professional medical advice.
-        """
-        
-        # Generate audio for fallback if requested
-        audio_file = None
-        if include_audio:
-            audio_file = self.audio_processor.text_to_speech(fallback_response[:200])
-        
-        return {
-            'success': True,
-            'response': fallback_response,
-            'confidence': 0.5,
-            'contexts': [],
-            'audio_file': audio_file,
-            'emergency': False,
-            'fallback': True
-        }
+            return {
+                'success': False,
+                'error': str(e),
+                'response': "I'm currently unable to process your medical query due to a technical issue. Please consult with a healthcare professional for medical advice.",
+                'confidence': 0.0,
+                'contexts': [],
+                'emergency': False
+            }
     
     def test_aws_connection(self):
-        """Test connection to AWS services"""
+        """Test AWS connection for sidebar status"""
         try:
-            test_payload = {
-                "api_Path": "healthCheck",  # You can add this to your Lambda for testing
-                "test": True
-            }
-            
-            response = requests.post(
-                self.aws_api_url,
-                headers=self.headers,
-                json=test_payload,
-                timeout=10
-            )
-            
-            return response.status_code == 200
-        
+            if self.s3_client:
+                self.s3_client.list_buckets()
+                return True
+            return False
         except Exception as e:
+            print(f"AWS connection test failed: {e}")
             return False

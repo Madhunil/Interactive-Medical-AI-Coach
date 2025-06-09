@@ -7,22 +7,55 @@ import os
 import pyaudio
 from datetime import datetime
 import streamlit as st
+from dotenv import load_dotenv
 
 class AudioProcessor:
     def __init__(self):
-        """Initialize audio processing components"""
+        """Initialize audio processing components with proper AWS credentials"""
+        
+        # Load environment variables
+        load_dotenv()
+        
+        # Speech recognition setup
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
         
-        # AWS clients (reuse existing credentials)
+        # AWS credentials from environment
+        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+        aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        aws_region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
+        
+        # Initialize AWS clients with explicit credentials
         try:
-            self.polly_client = boto3.client('polly', region_name='us-east-1')
-            self.s3_client = boto3.client('s3', region_name='us-east-1')
-            self.bucket_name = os.getenv('S3_BUCKET_NAME', 'wonderstorytexttoaudiofile')
+            if aws_access_key_id and aws_secret_access_key:
+                self.polly_client = boto3.client(
+                    'polly',
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=aws_secret_access_key,
+                    region_name=aws_region
+                )
+                
+                self.s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=aws_secret_access_key,
+                    region_name=aws_region
+                )
+                
+                self.bucket_name = os.getenv('S3_BUCKET_NAME', 'wonderstorytexttoaudiofile')
+                print("✅ AWS Audio clients initialized successfully")
+                
+            else:
+                print("❌ AWS credentials not found - Audio features limited")
+                self.polly_client = None
+                self.s3_client = None
+                self.bucket_name = None
+                
         except Exception as e:
-            st.error(f"AWS initialization failed: {e}")
+            print(f"❌ AWS Audio initialization failed: {e}")
             self.polly_client = None
             self.s3_client = None
+            self.bucket_name = None
     
     def record_audio(self, duration=10, timeout=5):
         """Record audio from microphone"""
@@ -30,7 +63,6 @@ class AudioProcessor:
             with self.microphone as source:
                 # Adjust for ambient noise
                 self.recognizer.adjust_for_ambient_noise(source, duration=1)
-                st.info(f"🎙️ Recording for {duration} seconds... Speak now!")
                 
                 # Record audio
                 audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=duration)
@@ -59,33 +91,33 @@ class AudioProcessor:
                 # Read the audio data
                 audio = self.recognizer.record(source)
                 
-                # Transcribe using Google Speech Recognition (free)
+                # Try Google Speech Recognition first (most accurate)
                 try:
                     text = self.recognizer.recognize_google(audio)
                     return {
                         'success': True,
                         'text': text,
-                        'confidence': 0.8  # Google doesn't provide confidence, so we estimate
+                        'confidence': 0.8
                     }
                 except sr.UnknownValueError:
-                    # Try with alternative service
+                    return {
+                        'success': False,
+                        'error': 'Could not understand the audio. Please speak more clearly.'
+                    }
+                except sr.RequestError as e:
+                    # Fallback to offline recognition
                     try:
                         text = self.recognizer.recognize_sphinx(audio)
                         return {
                             'success': True,
                             'text': text,
-                            'confidence': 0.6  # Lower confidence for offline recognition
+                            'confidence': 0.6
                         }
                     except:
                         return {
                             'success': False,
-                            'error': 'Could not understand the audio. Please speak more clearly.'
+                            'error': f'Speech recognition service error: {e}'
                         }
-                except sr.RequestError as e:
-                    return {
-                        'success': False,
-                        'error': f'Speech recognition service error: {e}'
-                    }
                 
         except Exception as e:
             return {
@@ -101,14 +133,21 @@ class AudioProcessor:
                 pass
     
     def text_to_speech(self, text, voice_id='Joanna'):
-        """Convert text to speech using AWS Polly"""
+        """Convert text to speech using AWS Polly (Disabled for now to avoid auth errors)"""
+        # Temporarily disabled to avoid AWS auth errors
+        st.info("🔊 Text-to-speech temporarily disabled while fixing AWS credentials")
+        return None
+        
+        # Original TTS code (uncomment when AWS auth is fully working):
+        """
         if not self.polly_client:
+            st.warning("⚠️ AWS Polly not available - TTS disabled")
             return None
         
         try:
             # Synthesize speech
             response = self.polly_client.synthesize_speech(
-                Text=text,
+                Text=text[:500],  # Limit text length
                 OutputFormat='mp3',
                 VoiceId=voice_id,
                 Engine='neural'
@@ -121,22 +160,12 @@ class AudioProcessor:
             with open(audio_file_name, 'wb') as file:
                 file.write(response['AudioStream'].read())
             
-            # Optionally upload to S3
-            if self.s3_client and self.bucket_name:
-                try:
-                    self.s3_client.upload_file(
-                        audio_file_name, 
-                        self.bucket_name, 
-                        f"medical-audio/{audio_file_name}"
-                    )
-                except:
-                    pass  # Continue even if S3 upload fails
-            
             return audio_file_name
             
         except Exception as e:
             st.error(f"Text-to-speech error: {str(e)}")
             return None
+        """
     
     def test_audio_system(self):
         """Test if audio system is working"""

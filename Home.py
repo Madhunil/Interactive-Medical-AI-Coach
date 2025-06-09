@@ -2,9 +2,19 @@ import streamlit as st
 import base64
 import io
 import time
+import os
+from dotenv import load_dotenv
 from utils.medical_rag import MedicalRAGProcessor
 from utils.audio_processor import AudioProcessor
 from config import MEDICAL_DISCLAIMER
+
+# CRITICAL: Load environment variables FIRST
+load_dotenv()
+
+# Verify environment variables are loaded
+if not os.getenv('AWS_ACCESS_KEY_ID'):
+    st.error("❌ AWS credentials not found. Please check your .env file.")
+    st.stop()
 
 # Set page configuration
 st.set_page_config(
@@ -14,7 +24,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS for ChatGPT-like interface
 st.markdown("""
 <style>
     .main-header {
@@ -26,119 +36,228 @@ st.markdown("""
         margin-bottom: 2rem;
     }
     
-    .medical-disclaimer {
-        background-color: #fef2f2;
-        border: 2px solid #dc2626;
-        border-radius: 8px;
+    .chat-container {
+        max-height: 400px;
+        overflow-y: auto;
         padding: 1rem;
-        margin: 1rem 0;
-        color: #dc2626;
-        font-weight: 500;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background-color: #fafafa;
+        margin-bottom: 1rem;
     }
     
-    .audio-section {
-        background-color: #f0f9ff;
-        border: 1px solid #0ea5e9;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-    }
-    
-    .transcription-display {
-        background-color: #f8fafc;
-        border-left: 4px solid #3b82f6;
+    .user-message {
+        background-color: #dcfce7;
+        border-left: 4px solid #22c55e;
         padding: 1rem;
-        margin: 1rem 0;
+        margin: 0.5rem 0;
         border-radius: 0 8px 8px 0;
     }
     
-    .response-container {
-        background-color: #f0fdf4;
-        border: 1px solid #22c55e;
-        border-radius: 8px;
-        padding: 1.5rem;
+    .ai-message {
+        background-color: #f0f9ff;
+        border-left: 4px solid #3b82f6;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 0 8px 8px 0;
+    }
+    
+    .emergency-message {
+        background-color: #fef2f2;
+        border-left: 4px solid #dc2626;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 0 8px 8px 0;
+        color: #dc2626;
+        font-weight: bold;
+    }
+    
+    .input-container {
+        background-color: #ffffff;
+        border: 2px solid #e5e7eb;
+        border-radius: 20px;
+        padding: 1rem;
         margin: 1rem 0;
     }
     
-    .stAudio {
-        margin: 1rem 0;
-    }
-    
-    .processing-status {
+    .recording-indicator {
         background-color: #fef3c7;
         border: 1px solid #f59e0b;
         border-radius: 8px;
         padding: 1rem;
         margin: 1rem 0;
+        text-align: center;
+    }
+    
+    .transcription-preview {
+        background-color: #f1f5f9;
+        border: 1px solid #64748b;
+        border-radius: 8px;
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        font-style: italic;
+    }
+    
+    .medical-disclaimer {
+        background-color: #fef2f2;
+        border: 2px solid #dc2626;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 2rem 0;
+        color: #dc2626;
+        font-size: 0.9rem;
+    }
+    
+    .stButton > button {
+        border-radius: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 def initialize_session_state():
     """Initialize session state variables"""
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
     if 'audio_processor' not in st.session_state:
         st.session_state.audio_processor = AudioProcessor()
     if 'rag_processor' not in st.session_state:
         st.session_state.rag_processor = MedicalRAGProcessor()
-    if 'transcribed_text' not in st.session_state:
-        st.session_state.transcribed_text = ""
     if 'is_recording' not in st.session_state:
         st.session_state.is_recording = False
+    if 'transcribed_text' not in st.session_state:
+        st.session_state.transcribed_text = ""
     if 'audio_file_path' not in st.session_state:
         st.session_state.audio_file_path = None
-    if 'processing_audio' not in st.session_state:
-        st.session_state.processing_audio = False
+    if 'processing' not in st.session_state:
+        st.session_state.processing = False
 
-def process_audio_transcription():
-    """Process recorded audio and transcribe it"""
-    if st.session_state.audio_file_path and not st.session_state.processing_audio:
-        st.session_state.processing_audio = True
+def add_message_to_chat(role, content, message_type="normal"):
+    """Add message to chat history"""
+    st.session_state.chat_history.append({
+        'role': role,
+        'content': content,
+        'type': message_type,
+        'timestamp': time.time()
+    })
+
+def display_chat_history():
+    """Display chat history in ChatGPT style"""
+    if not st.session_state.chat_history:
+        st.markdown("""
+        <div class="chat-container">
+            <div class="ai-message">
+                <strong>🩺 Medical AI Coach</strong><br>
+                Hello! I'm here to help you with medical information. You can type your question or use the voice recording feature below.
+                <br><br>
+                <em>Remember: I provide general health information only. Always consult healthcare professionals for medical advice.</em>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        chat_html = '<div class="chat-container">'
         
-        with st.spinner("🎙️ Transcribing your audio..."):
-            try:
-                # Transcribe the audio
-                transcription_result = st.session_state.audio_processor.transcribe_audio(
-                    st.session_state.audio_file_path
-                )
+        for message in st.session_state.chat_history:
+            if message['role'] == 'user':
+                chat_html += f'''
+                <div class="user-message">
+                    <strong>👤 You:</strong><br>
+                    {message['content']}
+                </div>
+                '''
+            elif message['role'] == 'assistant':
+                css_class = "emergency-message" if message['type'] == 'emergency' else "ai-message"
+                icon = "🚨" if message['type'] == 'emergency' else "🩺"
                 
-                if transcription_result['success']:
-                    st.session_state.transcribed_text = transcription_result['text']
-                    st.success("✅ Audio transcribed successfully!")
-                    return True
-                else:
-                    st.error(f"❌ Transcription failed: {transcription_result['error']}")
-                    return False
-                    
-            except Exception as e:
-                st.error(f"❌ Error during transcription: {str(e)}")
-                return False
-            finally:
-                st.session_state.processing_audio = False
-    return False
+                chat_html += f'''
+                <div class="{css_class}">
+                    <strong>{icon} Medical AI Coach:</strong><br>
+                    {message['content'].replace(chr(10), '<br>')}
+                </div>
+                '''
+        
+        chat_html += '</div>'
+        st.markdown(chat_html, unsafe_allow_html=True)
 
-def process_medical_query(query_text, include_audio=True):
-    """Process medical query and get response"""
+def process_audio_recording():
+    """Handle audio recording and transcription"""
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        if not st.session_state.is_recording:
+            if st.button("🎙️ Hold to Record", key="record_btn", type="secondary", use_container_width=True):
+                st.session_state.is_recording = True
+                st.rerun()
+        else:
+            st.markdown("""
+            <div class="recording-indicator">
+                🔴 <strong>Recording...</strong><br>
+                <em>Speak clearly, release when done</em>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("⏹️ Stop Recording", key="stop_btn", type="primary", use_container_width=True):
+                with st.spinner("🎙️ Processing your audio..."):
+                    # Record audio
+                    audio_file = st.session_state.audio_processor.record_audio(duration=10)
+                    
+                    if audio_file:
+                        st.session_state.audio_file_path = audio_file
+                        
+                        # Transcribe immediately
+                        transcription_result = st.session_state.audio_processor.transcribe_audio(audio_file)
+                        
+                        if transcription_result['success']:
+                            st.session_state.transcribed_text = transcription_result['text']
+                            st.success("✅ Audio transcribed successfully!")
+                            
+                            # Show transcription preview
+                            st.markdown(f"""
+                            <div class="transcription-preview">
+                                <strong>Transcribed:</strong> "{st.session_state.transcribed_text}"
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                        else:
+                            st.error(f"❌ Transcription failed: {transcription_result['error']}")
+                    else:
+                        st.error("❌ Recording failed!")
+                
+                st.session_state.is_recording = False
+                st.rerun()
+
+def process_user_query(query_text):
+    """Process user query and add to chat"""
     if not query_text.strip():
         st.warning("Please provide a medical question.")
-        return None
+        return
     
-    with st.spinner("🩺 Processing your medical query..."):
+    # Add user message to chat
+    add_message_to_chat('user', query_text)
+    
+    # Process with AI
+    with st.spinner("🩺 Analyzing your question..."):
         try:
-            # Call medical RAG processor
             response_data = st.session_state.rag_processor.process_medical_query(
                 query=query_text,
-                include_audio=include_audio
+                include_audio=False  # Disable audio response for now to avoid TTS errors
             )
             
             if response_data['success']:
-                return response_data
+                message_type = 'emergency' if response_data.get('emergency', False) else 'normal'
+                add_message_to_chat('assistant', response_data['response'], message_type)
+                
+                # Show additional info
+                if response_data.get('contexts'):
+                    with st.expander(f"📚 Sources ({len(response_data['contexts'])} found)"):
+                        for i, context in enumerate(response_data['contexts'], 1):
+                            st.text(f"Source {i}: {context[:200]}...")
             else:
-                st.error(f"❌ Error processing query: {response_data.get('error', 'Unknown error')}")
-                return None
+                error_response = f"I apologize, but I'm having technical difficulties. Error: {response_data.get('error', 'Unknown error')}"
+                add_message_to_chat('assistant', error_response)
                 
         except Exception as e:
-            st.error(f"❌ Error during query processing: {str(e)}")
-            return None
+            error_response = f"I'm currently experiencing technical issues. Please try again later. Error: {str(e)}"
+            add_message_to_chat('assistant', error_response)
 
 def main():
     # Initialize session state
@@ -148,188 +267,148 @@ def main():
     st.markdown("""
     <div class="main-header">
         <h1>🩺 Interactive Medical AI Coach</h1>
-        <p>Powered by AWS Bedrock & RAG Architecture</p>
+        <p>Ask questions using voice or text • Powered by AWS Bedrock & RAG Architecture</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Medical disclaimer (prominent display)
+    # Chat display
+    display_chat_history()
+    
+    # Input section (ChatGPT style)
+    st.markdown("""
+    <div class="input-container">
+    """, unsafe_allow_html=True)
+    
+    # Text input with voice option
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        # Show transcribed text if available
+        if st.session_state.transcribed_text:
+            user_input = st.text_area(
+                "Your medical question:", 
+                value=st.session_state.transcribed_text,
+                placeholder="Type your medical question here or use voice recording...",
+                height=80,
+                key="text_input"
+            )
+        else:
+            user_input = st.text_area(
+                "Your medical question:", 
+                placeholder="Type your medical question here or use voice recording...",
+                height=80,
+                key="text_input"
+            )
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+        if st.button("🎙️", help="Voice Input", type="secondary"):
+            st.session_state.show_voice_input = not st.session_state.get('show_voice_input', False)
+            st.rerun()
+    
+    # Voice input section (toggleable)
+    if st.session_state.get('show_voice_input', False):
+        st.markdown("### 🎙️ Voice Input")
+        process_audio_recording()
+        
+        # Clear transcribed text button
+        if st.session_state.transcribed_text:
+            if st.button("🗑️ Clear Transcription"):
+                st.session_state.transcribed_text = ""
+                st.rerun()
+    
+    # Send button
+    col1, col2, col3 = st.columns([2, 1, 2])
+    with col2:
+        if st.button("Send 📤", type="primary", use_container_width=True):
+            if user_input.strip():
+                process_user_query(user_input.strip())
+                # Clear input
+                st.session_state.transcribed_text = ""
+                st.rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Clear chat button
+    if st.session_state.chat_history:
+        if st.button("🗑️ Clear Chat", type="secondary"):
+            st.session_state.chat_history = []
+            st.session_state.transcribed_text = ""
+            st.rerun()
+    
+    # Medical disclaimer at bottom
+    st.markdown("---")
     disclaimer_html = MEDICAL_DISCLAIMER.replace('•', '<br>•')
     st.markdown(f"""
     <div class="medical-disclaimer">
         <h3>⚠️ Important Medical Disclaimer</h3>
         {disclaimer_html}
-    </div>
     """, unsafe_allow_html=True)
-    
-    # Create two main sections
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.markdown("### 🎙️ Audio Input")
-        st.markdown("""
-        <div class="audio-section">
-            <h4>Record Your Medical Question</h4>
-            <p>Click record, ask your question, then click stop. The audio will be automatically transcribed.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Audio recording section
-        if st.button("🎙️ Start Recording", key="start_record", type="primary"):
-            if not st.session_state.is_recording:
-                st.session_state.is_recording = True
-                st.session_state.transcribed_text = ""
-                with st.spinner("🎙️ Recording... (speak now)"):
-                    time.sleep(0.5)  # Small delay for UI update
-                    audio_file = st.session_state.audio_processor.record_audio(duration=10)
-                    if audio_file:
-                        st.session_state.audio_file_path = audio_file
-                        st.success("✅ Recording completed!")
-                        st.session_state.is_recording = False
-                    else:
-                        st.error("❌ Recording failed!")
-                        st.session_state.is_recording = False
-        
-        # Show recording status
-        if st.session_state.is_recording:
-            st.markdown("""
-            <div class="processing-status">
-                🎙️ <strong>Recording in progress...</strong><br>
-                Please speak clearly and wait for completion.
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Process transcription if audio exists
-        if st.session_state.audio_file_path and not st.session_state.transcribed_text:
-            if st.button("📝 Transcribe Audio", key="transcribe_btn"):
-                process_audio_transcription()
-        
-        # Display audio player if audio exists
-        if st.session_state.audio_file_path:
-            st.audio(st.session_state.audio_file_path, format='audio/wav')
-        
-        # Display transcription
-        if st.session_state.transcribed_text:
-            st.markdown(f"""
-            <div class="transcription-display">
-                <h4>📝 Transcribed Text:</h4>
-                <p><em>"{st.session_state.transcribed_text}"</em></p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Auto-process medical query button
-            if st.button("🩺 Get Medical Response", key="process_transcription", type="primary"):
-                response_data = process_medical_query(st.session_state.transcribed_text)
-                if response_data:
-                    st.session_state.current_response = response_data
-    
-    with col2:
-        st.markdown("### ✍️ Text Input (Alternative)")
-        
-        # Text input as alternative
-        manual_query = st.text_area(
-            "Or type your medical question here:",
-            placeholder="Example: What are the symptoms of diabetes? How can I manage high blood pressure?",
-            height=100,
-            key="manual_input"
-        )
-        
-        if st.button("🩺 Process Text Query", key="process_text"):
-            if manual_query.strip():
-                response_data = process_medical_query(manual_query)
-                if response_data:
-                    st.session_state.current_response = response_data
-            else:
-                st.warning("Please enter a medical question.")
-        
-        # Show current input source
-        if st.session_state.transcribed_text:
-            st.info("🎙️ Audio input ready for processing")
-        elif manual_query:
-            st.info("✍️ Text input ready for processing")
-    
-    # Display response if available
-    if hasattr(st.session_state, 'current_response') and st.session_state.current_response:
-        st.markdown("---")
-        response_data = st.session_state.current_response
-        
-        # Display response
-        formatted_response = response_data['response'].replace('\n', '<br>')
-        st.markdown(f"""
-        <div class="response-container">
-            <h3>🩺 Medical Information Response</h3>
-            {formatted_response}
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Display confidence and context info
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            confidence = response_data.get('confidence', 0.0)
-            st.metric("Confidence Level", f"{confidence:.1%}")
-        
-        with col2:
-            context_count = len(response_data.get('contexts', []))
-            st.metric("Knowledge Sources", context_count)
-        
-        # Audio response if available
-        if response_data.get('audio_file'):
-            st.markdown("### 🔊 Audio Response")
-            st.audio(response_data['audio_file'], format='audio/mp3')
-        
-        # Show source contexts (expandable)
-        if response_data.get('contexts'):
-            with st.expander("📚 View Knowledge Base Sources"):
-                for i, context in enumerate(response_data['contexts'], 1):
-                    st.markdown(f"**Source {i}:**")
-                    st.text(context[:300] + "..." if len(context) > 300 else context)
-                    st.markdown("---")
 
-# Sidebar with additional features
+# Sidebar with system status
 with st.sidebar:
     st.markdown("### 🛠️ System Status")
     
-    # Connection status
+    # Environment variables check
+    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
+    if aws_access_key:
+        st.success(f"✅ AWS Credentials: Loaded")
+        st.text(f"Key: {aws_access_key[:10]}...")
+    else:
+        st.error("❌ AWS Credentials: Missing")
+    
+    # AWS connection test
     try:
-        # Test AWS connection
-        test_connection = st.session_state.rag_processor.test_aws_connection()
-        if test_connection:
-            st.success("✅ AWS Connection: Active")
+        if hasattr(st.session_state, 'rag_processor'):
+            test_connection = st.session_state.rag_processor.test_aws_connection()
+            if test_connection:
+                st.success("✅ AWS Connection: Active")
+            else:
+                st.error("❌ AWS Connection: Failed")
         else:
-            st.error("❌ AWS Connection: Failed")
-    except:
-        st.warning("⚠️ AWS Connection: Unknown")
+            st.warning("⚠️ AWS Connection: Initializing...")
+    except Exception as e:
+        st.error("❌ AWS Connection: Error")
+        st.text(f"Error: {str(e)[:50]}...")
     
     # Audio system status
     try:
-        audio_status = st.session_state.audio_processor.test_audio_system()
-        if audio_status:
-            st.success("✅ Audio System: Ready")
+        if hasattr(st.session_state, 'audio_processor'):
+            audio_status = st.session_state.audio_processor.test_audio_system()
+            if audio_status:
+                st.success("✅ Audio System: Ready")
+            else:
+                st.error("❌ Audio System: Failed")
         else:
-            st.error("❌ Audio System: Failed")
-    except:
-        st.warning("⚠️ Audio System: Unknown")
+            st.warning("⚠️ Audio System: Initializing...")
+    except Exception as e:
+        st.error("❌ Audio System: Error")
     
     st.markdown("---")
-    st.markdown("### 📋 Usage Instructions")
+    st.markdown("### 📋 How to Use")
     st.markdown("""
-    1. **Record Audio**: Click record and speak your question
-    2. **Transcribe**: Audio is automatically converted to text
-    3. **Process**: Get AI-powered medical information
-    4. **Review**: Check confidence levels and sources
+    **💬 Chat Interface:**
+    - Type questions in the text area
+    - Click 🎙️ for voice input
+    - Press Send 📤 to get responses
     
-    **Tips:**
-    - Speak clearly and avoid background noise
+    **🎙️ Voice Input:**
+    - Click the microphone button
+    - Hold "Record" and speak clearly
+    - Release to transcribe automatically
+    
+    **💡 Tips:**
     - Ask specific medical questions
-    - Review the medical disclaimer
-    - Consult healthcare professionals for advice
+    - Review sources in expandable sections
+    - Emergency symptoms trigger safety alerts
     """)
     
-    # Clear session button
-    if st.button("🔄 Reset Session"):
-        for key in list(st.session_state.keys()):
-            if key not in ['audio_processor', 'rag_processor']:
-                del st.session_state[key]
-        st.rerun()
+    # Debug information
+    with st.expander("🔧 Debug Info"):
+        st.text(f"Chat messages: {len(st.session_state.get('chat_history', []))}")
+        st.text(f"Recording: {st.session_state.get('is_recording', False)}")
+        st.text(f"Transcribed: {bool(st.session_state.get('transcribed_text', ''))}")
+        st.text(f"Environment loaded: {bool(os.getenv('AWS_ACCESS_KEY_ID'))}")
 
 if __name__ == "__main__":
     main()
