@@ -5,6 +5,9 @@ audio_recordings/
 
 # Environment variables
 .env
+.env;C
+logs
+logs;C
 med_ai_coach_env/
 
 test_aws_keys.py
