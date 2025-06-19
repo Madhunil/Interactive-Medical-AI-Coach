@@ -11,3 +11,5 @@ logs;C
 med_ai_coach_env/
 
 test_aws_keys.py
+
+data;C
