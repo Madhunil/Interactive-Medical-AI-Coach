@@ -274,7 +274,7 @@ class MedicalRAGProcessor:
         """Get the appropriate knowledge base ID for current therapeutic area"""
         if self.current_therapeutic_area:
             # In production, each therapeutic area would have its own KB
-            area_kb_id = f"{self.knowledge_base_id}_{self.current_therapeutic_area}"
+            area_kb_id = f"{self.knowledge_base_id}"
             logger.debug(f"Using area-specific KB: {area_kb_id}")
             return area_kb_id
         

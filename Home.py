@@ -650,11 +650,106 @@ def process_enhanced_user_query(query_text):
             add_message_to_chat('assistant', error_response)
 
 @log_function_call
+def render_sidebar():
+    """Render the enhanced sidebar with system status and controls"""
+    with st.sidebar:
+        st.markdown("### 🛠️ System Status")
+        
+        # System status checks
+        aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
+        if aws_access_key:
+            st.success("✅ AWS Credentials")
+        else:
+            st.error("❌ AWS Credentials")
+        
+        # AWS connection test
+        try:
+            if hasattr(st.session_state, 'rag_processor') and st.session_state.rag_processor:
+                test_connection = st.session_state.rag_processor.test_aws_connection()
+                if test_connection:
+                    st.success("✅ AWS Connection")
+                else:
+                    st.error("❌ AWS Connection")
+            else:
+                st.error("❌ AWS Connection")
+        except:
+            st.error("❌ AWS Connection")
+        
+        # Audio system status
+        try:
+            if hasattr(st.session_state, 'audio_processor') and st.session_state.audio_processor:
+                audio_info = st.session_state.audio_processor.get_audio_info()
+                
+                if audio_info['audio_system_working']:
+                    st.success("✅ Audio System")
+                elif audio_info['audio_libraries_available']:
+                    st.warning("⚠️ Audio (Limited)")
+                    if st.button("ℹ️ Audio Info", key="audio_info_btn"):
+                        st.info("""
+                        **Audio Status:** Limited functionality
+                        - Audio libraries: Available
+                        - Microphone: Not available
+                        - Text-to-speech: """ + ("Available" if audio_info.get('aws_polly_available') else "Not available") + """
+                        
+                        This is normal in containerized environments.
+                        """)
+                else:
+                    st.error("❌ Audio System")
+            else:
+                st.error("❌ Audio System")
+        except Exception as e:
+            st.error("❌ Audio System")
+            logger.debug(f"Audio status check failed: {str(e)}")
+        
+        st.markdown("---")
+        
+        # Quick learning modules
+        st.markdown("### 📚 Quick Modules")
+        if st.session_state.selected_therapeutic_area:
+            area_info = THERAPEUTIC_AREAS[st.session_state.selected_therapeutic_area]
+            for module in area_info.get('quick_modules', []):
+                if st.button(f"📖 {module}", key=f"module_{module}"):
+                    st.session_state.transcribed_text = f"Tell me about {module} in {area_info['name']}"
+                    st.rerun()
+        
+        st.markdown("---")
+        
+        # Session Statistics
+        if st.session_state.chat_history:
+            st.markdown("### 📈 Session Stats")
+            stats = st.session_state.session_analytics.get_session_stats(st.session_state.chat_history)
+            
+            st.metric("Questions", stats.get('total_questions', 0))
+            st.metric("Avg Response Time", f"{stats.get('avg_response_time', 0):.1f}s")
+            
+            if stats.get('topics_covered'):
+                st.markdown("**Topics Covered:**")
+                for topic in stats['topics_covered'][:5]:  # Show top 5
+                    st.text(f"• {topic}")
+        
+        st.markdown("---")
+        
+        # Help and tips
+        st.markdown("### 💡 Tips")
+        st.markdown("""
+        **🎯 Effective Questions:**
+        - "Explain the mechanism of action of..."
+        - "What are the side effects of..."
+        - "Compare treatment options for..."
+        - "What are the latest guidelines for..."
+        
+        **🎙️ Voice Tips:**
+        - Speak clearly and slowly
+        - Mention specific drug names clearly
+        - Ask one question at a time
+        """)
+
+@log_function_call
 def main():
     """Main application function"""
     logger.info("🚀 Starting Interactive Medical AI Coach")
     
-    # Initialize session state
+    # Initialize session state FIRST
     initialize_session_state()
     
     # Main header
@@ -769,96 +864,14 @@ def main():
             st.session_state.session_id = f"session_{int(time.time())}"
             st.rerun()
 
-# Enhanced sidebar
-with st.sidebar:
-    st.markdown("### 🛠️ System Status")
-    
-    # System status checks
-    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-    if aws_access_key:
-        st.success("✅ AWS Credentials")
-    else:
-        st.error("❌ AWS Credentials")
-    
-    # AWS connection test
-    try:
-        if hasattr(st.session_state, 'rag_processor'):
-            test_connection = st.session_state.rag_processor.test_aws_connection()
-            if test_connection:
-                st.success("✅ AWS Connection")
-            else:
-                st.error("❌ AWS Connection")
-    except:
-        st.error("❌ AWS Connection")
-    
-    # Audio system status
-    try:
-        if hasattr(st.session_state, 'audio_processor') and st.session_state.audio_processor:
-            audio_info = st.session_state.audio_processor.get_audio_info()
-            
-            if audio_info['audio_system_working']:
-                st.success("✅ Audio System")
-            elif audio_info['audio_libraries_available']:
-                st.warning("⚠️ Audio (Limited)")
-                if st.button("ℹ️ Audio Info", key="audio_info_btn"):
-                    st.info("""
-                    **Audio Status:** Limited functionality
-                    - Audio libraries: Available
-                    - Microphone: Not available
-                    - Text-to-speech: """ + ("Available" if audio_info.get('aws_polly_available') else "Not available") + """
-                    
-                    This is normal in containerized environments.
-                    """)
-            else:
-                st.error("❌ Audio System")
-        else:
-            st.error("❌ Audio System")
-    except Exception as e:
-        st.error("❌ Audio System")
-        logger.debug(f"Audio status check failed: {str(e)}")
-    
-    st.markdown("---")
-    
-    # Quick learning modules
-    st.markdown("### 📚 Quick Modules")
-    if st.session_state.selected_therapeutic_area:
-        area_info = THERAPEUTIC_AREAS[st.session_state.selected_therapeutic_area]
-        for module in area_info.get('quick_modules', []):
-            if st.button(f"📖 {module}", key=f"module_{module}"):
-                st.session_state.transcribed_text = f"Tell me about {module} in {area_info['name']}"
-                st.rerun()
-    
-    st.markdown("---")
-    
-    # Session Statistics
-    if st.session_state.chat_history:
-        st.markdown("### 📈 Session Stats")
-        stats = st.session_state.session_analytics.get_session_stats(st.session_state.chat_history)
-        
-        st.metric("Questions", stats.get('total_questions', 0))
-        st.metric("Avg Response Time", f"{stats.get('avg_response_time', 0):.1f}s")
-        
-        if stats.get('topics_covered'):
-            st.markdown("**Topics Covered:**")
-            for topic in stats['topics_covered'][:5]:  # Show top 5
-                st.text(f"• {topic}")
-    
-    st.markdown("---")
-    
-    # Help and tips
-    st.markdown("### 💡 Tips")
-    st.markdown("""
-    **🎯 Effective Questions:**
-    - "Explain the mechanism of action of..."
-    - "What are the side effects of..."
-    - "Compare treatment options for..."
-    - "What are the latest guidelines for..."
-    
-    **🎙️ Voice Tips:**
-    - Speak clearly and slowly
-    - Mention specific drug names clearly
-    - Ask one question at a time
-    """)
-
 if __name__ == "__main__":
+    # Initialize session state first, then render sidebar, then run main
+    if 'initialized' not in st.session_state:
+        initialize_session_state()
+        st.session_state.initialized = True
+    
+    # Render sidebar (now that session state is initialized)
+    render_sidebar()
+    
+    # Run main application
     main()

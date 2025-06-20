@@ -55,3 +55,7 @@ flake8>=6.0
 # Additional utilities
 tqdm>=4.65
 python-magic>=0.4
+
+# Logging and Monitoring
+loguru>=0.7
+colorlog>=6.7
