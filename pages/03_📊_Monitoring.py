@@ -1,13 +1,20 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import json
 import os
 from utils.medical_rag import MedicalRAGProcessor
 from utils.logging import setup_logging
+
+# Try to import plotly with fallback
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("⚠️ Plotly not available. Install plotly for advanced charts: `pip install plotly`")
 
 # Setup logging
 logger = setup_logging()
@@ -207,15 +214,16 @@ def render_lambda_metrics():
             with col1:
                 st.markdown("**Performance Metrics**")
                 
-                metrics_df = pd.DataFrame([
-                    {"Metric": "Invocations", "Value": f"{wonderscribe_metrics.get('invocation_count', 0):,}"},
-                    {"Metric": "Success Rate", "Value": f"{wonderscribe_metrics.get('success_rate', 0):.1%}"},
-                    {"Metric": "Avg Duration", "Value": f"{wonderscribe_metrics.get('avg_duration', 0):.2f}s"},
-                    {"Metric": "Min Duration", "Value": f"{wonderscribe_metrics.get('min_duration', 0):.2f}s"},
-                    {"Metric": "Max Duration", "Value": f"{wonderscribe_metrics.get('max_duration', 0):.2f}s"},
-                ])
+                metrics_data = [
+                    ["Invocations", f"{wonderscribe_metrics.get('invocation_count', 0):,}"],
+                    ["Success Rate", f"{wonderscribe_metrics.get('success_rate', 0):.1%}"],
+                    ["Avg Duration", f"{wonderscribe_metrics.get('avg_duration', 0):.2f}s"],
+                    ["Min Duration", f"{wonderscribe_metrics.get('min_duration', 0):.2f}s"],
+                    ["Max Duration", f"{wonderscribe_metrics.get('max_duration', 0):.2f}s"],
+                ]
                 
-                st.dataframe(metrics_df, use_container_width=True)
+                metrics_df = pd.DataFrame(metrics_data, columns=["Metric", "Value"])
+                st.dataframe(metrics_df, use_container_width=True, hide_index=True)
             
             with col2:
                 st.markdown("**Status Information**")
@@ -251,10 +259,10 @@ def render_lambda_metrics():
             display_df['timestamp'] = display_df['timestamp'].dt.strftime('%H:%M:%S')
             display_df.columns = ['Time', 'Function', 'Duration (s)', 'Status', 'Error']
             
-            st.dataframe(display_df, use_container_width=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
             
-            # Performance chart
-            if len(calls_df) > 1:
+            # Performance chart (only if plotly is available)
+            if PLOTLY_AVAILABLE and len(calls_df) > 1:
                 st.markdown("#### Performance Trend")
                 
                 fig = px.line(calls_df, x='timestamp', y='duration', 
@@ -263,6 +271,9 @@ def render_lambda_metrics():
                 
                 fig.update_layout(height=400)
                 st.plotly_chart(fig, use_container_width=True)
+            elif not PLOTLY_AVAILABLE and len(calls_df) > 1:
+                st.markdown("#### Performance Trend")
+                st.line_chart(calls_df.set_index('timestamp')['duration'])
         else:
             st.info("ℹ️ No recent Lambda calls to display.")
             
@@ -318,18 +329,23 @@ def render_document_processing_status():
             s3_key = processor.s3_document_key
             st.info(f"📁 Source: s3://{s3_bucket}/{s3_key}")
         
-        # Document chunk distribution
+        # Document chunk distribution (simplified chart)
         if hasattr(processor, 'document_chunks') and processor.document_chunks:
             st.markdown("#### Document Chunk Distribution")
             
             chunk_sizes = [chunk['char_count'] for chunk in processor.document_chunks]
             
-            fig = px.histogram(x=chunk_sizes, nbins=20, 
-                             title='Document Chunk Size Distribution',
-                             labels={'x': 'Chunk Size (characters)', 'y': 'Count'})
-            
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
+            if PLOTLY_AVAILABLE:
+                fig = px.histogram(x=chunk_sizes, nbins=20, 
+                                 title='Document Chunk Size Distribution',
+                                 labels={'x': 'Chunk Size (characters)', 'y': 'Count'})
+                
+                fig.update_layout(height=400)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                # Fallback to simple chart
+                chunk_df = pd.DataFrame({'chunk_size': chunk_sizes})
+                st.bar_chart(chunk_df['chunk_size'])
             
     except Exception as e:
         st.error(f"❌ Failed to load document processing status: {str(e)}")
@@ -346,8 +362,10 @@ def render_system_logs():
             "logs/aws_operations_" + datetime.now().strftime("%Y-%m-%d") + ".log"
         ]
         
+        logs_found = False
         for log_file in log_files:
             if os.path.exists(log_file):
+                logs_found = True
                 with st.expander(f"📄 {os.path.basename(log_file)}"):
                     try:
                         with open(log_file, 'r', encoding='utf-8') as f:
@@ -359,7 +377,7 @@ def render_system_logs():
                     except Exception as e:
                         st.error(f"Failed to read log file: {e}")
         
-        if not any(os.path.exists(log_file) for log_file in log_files):
+        if not logs_found:
             st.info("ℹ️ No log files found for today.")
             
     except Exception as e:
@@ -406,7 +424,6 @@ def render_export_controls():
         if st.button("🧹 Clear Lambda Metrics"):
             try:
                 if 'rag_processor' in st.session_state:
-                    # This would require adding a reset method to the processor
                     st.info("ℹ️ Lambda metrics cleared (restart session to fully reset)")
                     st.rerun()
             except Exception as e:
@@ -458,12 +475,17 @@ def main():
     auto_refresh = st.sidebar.checkbox("🔄 Auto-refresh (30s)", value=False)
     
     if auto_refresh:
+        import time
         time.sleep(30)
         st.rerun()
     
     # Manual refresh button
     if st.sidebar.button("🔄 Refresh Now"):
         st.rerun()
+    
+    # Show plotly status
+    if not PLOTLY_AVAILABLE:
+        st.sidebar.warning("⚠️ Plotly not installed - some charts unavailable")
     
     # Render dashboard sections
     render_system_overview()
@@ -482,10 +504,11 @@ def main():
     
     # Footer
     st.markdown("---")
-    st.markdown("""
+    st.markdown(f"""
     <div style="text-align: center; color: #64748b; margin-top: 2rem;">
         <p>📊 Medical AI Coach Monitoring Dashboard</p>
-        <p>Last updated: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + """</p>
+        <p>Last updated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+        <p>Plotly Status: {"✅ Available" if PLOTLY_AVAILABLE else "❌ Not Available"}</p>
     </div>
     """, unsafe_allow_html=True)
 

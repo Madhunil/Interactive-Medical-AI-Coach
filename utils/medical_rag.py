@@ -68,7 +68,7 @@ class MedicalRAGProcessor:
         self.s3_document_key = 'etlp/J&J_2025_Workbook.pdf'  # Document path from the image
         
         # Lambda configuration
-        self.lambda_function_name = os.getenv('LAMBDA_FUNCTION_NAME', 'vector_db_connector_lambda')
+        self.lambda_function_name = os.getenv('LAMBDA_FUNCTION_NAME', 'wonderscribeconnectVDB')
         self.lambda_api_gateway_url = os.getenv('LAMBDA_API_GATEWAY_URL')
         
         # Validate credentials exist
@@ -1329,6 +1329,9 @@ class MedicalRAGProcessor:
         except Exception as e:
             logger.error(f"❌ Lambda metrics export failed: {e}")
             return None
+    
+    @log_function_call
+    def test_aws_connection(self) -> bool:
         """Enhanced AWS connection test with comprehensive validation"""
         logger.debug("🧪 Testing enhanced AWS connection...")
         

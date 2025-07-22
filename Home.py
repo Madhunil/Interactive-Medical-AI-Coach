@@ -34,289 +34,71 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Enhanced CSS for modern medical interface
+# Simplified CSS for better compatibility
 st.markdown("""
 <style>
-    /* Import Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Global Styles */
-    .main {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Header Styles */
     .main-header {
         background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%);
-        padding: 2.5rem;
-        border-radius: 16px;
+        padding: 2rem;
+        border-radius: 12px;
         color: white;
         text-align: center;
         margin-bottom: 2rem;
-        box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
     
-    .main-header h1 {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .main-header p {
-        font-size: 1.1rem;
-        opacity: 0.9;
-        margin: 0;
-    }
-    
-    /* Lambda Integration Status */
-    .lambda-status {
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-        border: 2px solid #0ea5e9;
-        border-radius: 12px;
+    .status-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
         padding: 1rem;
-        margin: 1rem 0;
+        margin: 0.5rem 0;
         text-align: center;
     }
     
-    .lambda-status.enabled {
-        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-        border-color: #22c55e;
+    .status-success {
+        border-left: 4px solid #22c55e;
+        background: #f0fdf4;
     }
     
-    .lambda-status.disabled {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        border-color: #f59e0b;
+    .status-warning {
+        border-left: 4px solid #f59e0b;
+        background: #fffbeb;
     }
     
-    /* Therapeutic Area Selector */
-    .therapeutic-area-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 1rem;
-        margin: 2rem 0;
+    .status-error {
+        border-left: 4px solid #dc2626;
+        background: #fef2f2;
     }
     
     .therapeutic-area-card {
-        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        background: #f8fafc;
         border: 2px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1.5rem;
-        transition: all 0.3s ease;
-        cursor: pointer;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem;
         text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
     }
     
     .therapeutic-area-card:hover {
         border-color: #3b82f6;
-        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
-        transform: translateY(-2px);
+        background: #f0f9ff;
     }
     
-    .therapeutic-area-card.selected {
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-        border-color: #3b82f6;
-        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
-    }
-    
-    .area-icon {
-        font-size: 2rem;
-        margin-bottom: 0.5rem;
-    }
-    
-    .area-name {
-        font-size: 1.2rem;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        color: #1e40af;
-    }
-    
-    .area-description {
-        font-size: 0.9rem;
-        color: #64748b;
-        line-height: 1.4;
-    }
-    
-    /* Chat Container */
-    .chat-container {
-        max-height: 500px;
-        overflow-y: auto;
-        padding: 1.5rem;
-        border: 1px solid #e5e7eb;
-        border-radius: 16px;
-        background: linear-gradient(to bottom, #fafafa 0%, #f5f5f5 100%);
-        margin-bottom: 1.5rem;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);
-    }
-    
-    .chat-container::-webkit-scrollbar {
-        width: 8px;
-    }
-    
-    .chat-container::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 4px;
-    }
-    
-    .chat-container::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 4px;
-    }
-    
-    .chat-container::-webkit-scrollbar-thumb:hover {
-        background: #a1a1a1;
-    }
-    
-    /* Message Styles */
-    .user-message {
-        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-        border-left: 4px solid #22c55e;
-        padding: 1.2rem;
-        margin: 0.8rem 0;
-        border-radius: 0 12px 12px 0;
-        box-shadow: 0 2px 8px rgba(34, 197, 94, 0.1);
-        position: relative;
-    }
-    
-    .ai-message {
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-        border-left: 4px solid #3b82f6;
-        padding: 1.2rem;
-        margin: 0.8rem 0;
-        border-radius: 0 12px 12px 0;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
-        position: relative;
-    }
-    
-    .lambda-enhanced-message {
-        background: linear-gradient(135deg, #fdf4ff 0%, #f3e8ff 100%);
-        border-left: 4px solid #8b5cf6;
-        padding: 1.2rem;
-        margin: 0.8rem 0;
-        border-radius: 0 12px 12px 0;
-        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.1);
-        position: relative;
-    }
-    
-    .emergency-message {
-        background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
-        border-left: 4px solid #dc2626;
-        padding: 1.2rem;
-        margin: 0.8rem 0;
-        border-radius: 0 12px 12px 0;
+    .emergency-alert {
+        background: #fef2f2;
+        border: 2px solid #dc2626;
+        border-radius: 8px;
+        padding: 1rem;
         color: #dc2626;
-        font-weight: 600;
-        box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1);
         animation: pulse 2s infinite;
     }
     
     @keyframes pulse {
-        0%, 100% { box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1); }
-        50% { box-shadow: 0 4px 16px rgba(220, 38, 38, 0.2); }
-    }
-    
-    /* Input Container */
-    .input-container {
-        background: white;
-        border: 2px solid #e5e7eb;
-        border-radius: 20px;
-        padding: 1.5rem;
-        margin: 1.5rem 0;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-    }
-    
-    .input-container:focus-within {
-        border-color: #3b82f6;
-        box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
-    }
-    
-    /* Recording Indicator */
-    .recording-indicator {
-        background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%);
-        border: 2px solid #f59e0b;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        text-align: center;
-        animation: recording-pulse 1.5s infinite;
-        box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2);
-    }
-    
-    @keyframes recording-pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.8; }
-    }
-    
-    /* Session Info Card */
-    .session-info-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    }
-    
-    /* Buttons */
-    .stButton > button {
-        border-radius: 12px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        border: none;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    
-    /* Metrics */
-    .metric-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 1.5rem;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        transition: all 0.3s ease;
-    }
-    
-    .metric-card:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-        transform: translateY(-2px);
-    }
-    
-    /* Quick Actions */
-    .quick-actions {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        margin: 1rem 0;
-    }
-    
-    .quick-action-btn {
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    
-    .quick-action-btn:hover {
-        background: #e2e8f0;
-        border-color: #94a3b8;
-    }
-    
-    /* Sidebar Enhancements */
-    .sidebar-section {
-        background: white;
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border: 1px solid #e5e7eb;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -418,16 +200,20 @@ def render_lambda_status():
     lambda_working, lambda_message = test_lambda_connection()
     st.session_state.lambda_status = lambda_working
     
-    status_class = "enabled" if lambda_working else "disabled"
-    status_icon = "✅" if lambda_working else "⚠️"
-    status_text = "Lambda Integration Active" if lambda_working else "Lambda Integration Limited"
+    if lambda_working:
+        status_class = "status-success"
+        status_icon = "✅"
+        status_text = "Lambda Integration Active"
+    else:
+        status_class = "status-warning"
+        status_icon = "⚠️"
+        status_text = "Lambda Integration Limited"
     
     st.markdown(f"""
-    <div class="lambda-status {status_class}">
+    <div class="status-card {status_class}">
         <h4>{status_icon} {status_text}</h4>
         <p><strong>Function:</strong> wonderscribeconnectVDB</p>
         <p><strong>Status:</strong> {lambda_message}</p>
-        <p><strong>API Gateway:</strong> {'Connected' if lambda_working else 'Limited'}</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -454,12 +240,7 @@ def render_therapeutic_area_selector():
         
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.markdown(f"""
-            <div class="session-info-card">
-                <h4>{area_info['icon']} Current Area: {area_info['name']}</h4>
-                <p>{area_info['description']}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.info(f"{area_info['icon']} **Current Area:** {area_info['name']} - {area_info['description']}")
         
         with col2:
             if st.button("🔄 Change Area", type="secondary"):
@@ -525,7 +306,6 @@ def render_session_dashboard():
     
     with col5:
         lambda_status = "Active" if st.session_state.lambda_status else "Limited"
-        lambda_color = "normal" if st.session_state.lambda_status else "inverse"
         st.metric("Lambda Status", lambda_status)
 
 @log_function_call
@@ -544,38 +324,36 @@ def add_message_to_chat(role, content, message_type="normal", metadata=None):
     st.session_state.chat_history.append(message)
     
     # Log analytics
-    st.session_state.session_analytics.log_interaction(
-        st.session_state.session_id,
-        role,
-        content,
-        st.session_state.selected_therapeutic_area
-    )
+    if st.session_state.session_analytics:
+        st.session_state.session_analytics.log_interaction(
+            st.session_state.session_id,
+            role,
+            content,
+            st.session_state.selected_therapeutic_area
+        )
 
 @log_function_call
 def display_enhanced_chat_history():
-    """Display enhanced chat history with Lambda integration indicators"""
+    """Display enhanced chat history using Streamlit native components"""
     if not st.session_state.chat_history:
         welcome_area = st.session_state.selected_therapeutic_area
         area_info = THERAPEUTIC_AREAS.get(welcome_area, {'name': 'General Medicine', 'icon': '🩺'})
         
-        lambda_info = ""
-        if st.session_state.use_lambda_integration and st.session_state.lambda_status:
-            lambda_info = "<br><br><strong>🔧 Lambda Integration:</strong> Enhanced processing with wonderscribeconnectVDB function enabled"
+        # Welcome message
+        st.info(f"""
+        **{area_info['icon']} Medical AI Coach - {area_info['name']}**
         
-        st.markdown(f"""
-        <div class="chat-container">
-            <div class="ai-message">
-                <strong>{area_info['icon']} Medical AI Coach - {area_info['name']}</strong><br>
-                Welcome to the Interactive Medical AI Coach! I'm here to help you learn about {area_info['name'].lower()}. 
-                You can ask questions using text or voice input.
-                <br><br>
-                <em>💡 Tip: Try asking about specific conditions, treatments, drug mechanisms, or clinical guidelines.</em>
-                {lambda_info}
-                <br><br>
-                <strong>⚠️ Remember:</strong> This is for educational purposes only. Always follow clinical guidelines and consult healthcare professionals.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        Welcome to the Interactive Medical AI Coach! I'm here to help you learn about {area_info['name'].lower()}. 
+        You can ask questions using text or voice input.
+        
+        💡 **Tip:** Try asking about specific conditions, treatments, drug mechanisms, or clinical guidelines.
+        
+        ⚠️ **Remember:** This is for educational purposes only. Always follow clinical guidelines and consult healthcare professionals.
+        """)
+        
+        # Lambda integration info
+        if st.session_state.use_lambda_integration and st.session_state.lambda_status:
+            st.success("🔧 **Lambda Integration:** Enhanced processing with wonderscribeconnectVDB function enabled")
         
         # Show quick action buttons for the selected area
         if welcome_area and welcome_area in THERAPEUTIC_AREAS:
@@ -590,60 +368,62 @@ def display_enhanced_chat_history():
                             st.session_state.transcribed_text = question
                             st.rerun()
     else:
-        chat_html = '<div class="chat-container">'
+        # Display chat messages using Streamlit's chat interface
+        st.markdown("### 💬 Conversation History")
         
-        for message in st.session_state.chat_history:
-            timestamp = datetime.fromtimestamp(message['timestamp']).strftime("%H:%M")
-            
-            if message['role'] == 'user':
-                chat_html += f'''
-                <div class="user-message">
-                    <strong>👤 You • {timestamp}</strong><br>
-                    {message['content']}
-                </div>
-                '''
-            elif message['role'] == 'assistant':
-                # Determine message style based on type and Lambda usage
-                if message['type'] == 'emergency':
-                    css_class = "emergency-message"
-                    icon = "🚨"
-                elif message.get('lambda_enhanced', False):
-                    css_class = "lambda-enhanced-message"
-                    icon = "🔧"
-                else:
-                    css_class = "ai-message"
-                    icon = "🧠"
-                
-                # Add confidence and Lambda indicators
-                indicators = []
-                if 'metadata' in message and 'confidence' in message['metadata']:
-                    confidence = message['metadata']['confidence']
-                    if confidence < 0.7:
-                        indicators.append(f"<span style='color: #f59e0b;'>⚠️ {confidence:.0%} confidence</span>")
-                    else:
-                        indicators.append(f"<span style='color: #22c55e;'>✅ {confidence:.0%} confidence</span>")
-                
-                if message.get('lambda_enhanced', False):
-                    indicators.append("<span style='color: #8b5cf6;'>🔧 Lambda Enhanced</span>")
-                
-                if 'metadata' in message and 'sources' in message['metadata']:
-                    sources = message['metadata']['sources']
-                    if isinstance(sources, list) and len(sources) > 1:
-                        indicators.append(f"<span style='color: #06b6d4;'>📚 {len(sources)} sources</span>")
-                
-                indicator_text = " • ".join(indicators)
-                if indicator_text:
-                    indicator_text = " • " + indicator_text
-                
-                chat_html += f'''
-                <div class="{css_class}">
-                    <strong>{icon} AI Coach • {timestamp}{indicator_text}</strong><br>
-                    {message['content'].replace(chr(10), '<br>')}
-                </div>
-                '''
+        # Create container for chat messages
+        chat_container = st.container()
         
-        chat_html += '</div>'
-        st.markdown(chat_html, unsafe_allow_html=True)
+        with chat_container:
+            for i, message in enumerate(st.session_state.chat_history):
+                timestamp = datetime.fromtimestamp(message['timestamp']).strftime("%H:%M")
+                
+                if message['role'] == 'user':
+                    # User message
+                    with st.chat_message("user"):
+                        st.write(f"**You** • {timestamp}")
+                        st.write(message['content'])
+                
+                elif message['role'] == 'assistant':
+                    # AI message with indicators
+                    avatar = "🚨" if message['type'] == 'emergency' else ("🔧" if message.get('lambda_enhanced') else "🧠")
+                    
+                    with st.chat_message("assistant", avatar=avatar):
+                        # Header with indicators
+                        indicators = []
+                        if 'metadata' in message and 'confidence' in message['metadata']:
+                            confidence = message['metadata']['confidence']
+                            if confidence < 0.7:
+                                indicators.append(f"⚠️ {confidence:.0%} confidence")
+                            else:
+                                indicators.append(f"✅ {confidence:.0%} confidence")
+                        
+                        if message.get('lambda_enhanced'):
+                            indicators.append("🔧 Lambda Enhanced")
+                        
+                        if message['type'] == 'emergency':
+                            indicators.append("🚨 Emergency Alert")
+                        
+                        indicator_text = " • ".join(indicators)
+                        header_text = f"**AI Coach** • {timestamp}"
+                        if indicator_text:
+                            header_text += f" • {indicator_text}"
+                        
+                        st.write(header_text)
+                        
+                        # Message content
+                        if message['type'] == 'emergency':
+                            st.error(message['content'])
+                        else:
+                            st.write(message['content'])
+                        
+                        # Show sources if available
+                        if 'metadata' in message and 'sources' in message['metadata']:
+                            sources = message['metadata']['sources']
+                            if isinstance(sources, list) and len(sources) > 1:
+                                with st.expander("📚 Sources"):
+                                    for source in sources:
+                                        st.text(f"• {source}")
 
 @log_function_call
 def process_enhanced_audio_recording():
@@ -687,12 +467,7 @@ def process_enhanced_audio_recording():
                 st.session_state.is_recording = True
                 st.rerun()
         else:
-            st.markdown("""
-            <div class="recording-indicator">
-                🔴 <strong>Recording in progress...</strong><br>
-                <em>Speak clearly about your medical question</em>
-            </div>
-            """, unsafe_allow_html=True)
+            st.warning("🔴 **Recording in progress...** Speak clearly about your medical question")
             
             if st.button("⏹️ Stop & Transcribe", key="stop_btn", type="secondary", use_container_width=True):
                 with st.spinner("🎙️ Processing your audio..."):
@@ -705,12 +480,7 @@ def process_enhanced_audio_recording():
                             if transcription_result['success']:
                                 st.session_state.transcribed_text = transcription_result['text']
                                 st.success("✅ Audio transcribed successfully!")
-                                
-                                st.markdown(f"""
-                                <div style="background: #f0f9ff; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                                    <strong>Transcribed:</strong> "{st.session_state.transcribed_text}"
-                                </div>
-                                """, unsafe_allow_html=True)
+                                st.info(f"**Transcribed:** \"{st.session_state.transcribed_text}\"")
                             else:
                                 st.error(f"❌ Transcription failed: {transcription_result['error']}")
                         else:
@@ -838,22 +608,12 @@ def render_sidebar():
                     st.success("✅ Audio System")
                 elif audio_info['audio_libraries_available']:
                     st.warning("⚠️ Audio (Limited)")
-                    if st.button("ℹ️ Audio Info", key="audio_info_btn"):
-                        st.info("""
-                        **Audio Status:** Limited functionality
-                        - Audio libraries: Available
-                        - Microphone: Not available
-                        - Text-to-speech: """ + ("Available" if audio_info.get('aws_polly_available') else "Not available") + """
-                        
-                        This is normal in containerized environments.
-                        """)
                 else:
                     st.error("❌ Audio System")
             else:
                 st.error("❌ Audio System")
         except Exception as e:
             st.error("❌ Audio System")
-            logger.debug(f"Audio status check failed: {str(e)}")
         
         st.markdown("---")
         
@@ -886,7 +646,7 @@ def render_sidebar():
         st.markdown("### 📚 Quick Modules")
         if st.session_state.selected_therapeutic_area:
             area_info = THERAPEUTIC_AREAS[st.session_state.selected_therapeutic_area]
-            for module in area_info.get('quick_modules', []):
+            for module in area_info.get('quick_modules', [])[:5]:  # Limit to 5
                 if st.button(f"📖 {module}", key=f"module_{module}"):
                     st.session_state.transcribed_text = f"Tell me about {module} in {area_info['name']}"
                     st.rerun()
@@ -896,48 +656,22 @@ def render_sidebar():
         # Session Statistics
         if st.session_state.chat_history:
             st.markdown("### 📈 Session Stats")
-            stats = st.session_state.session_analytics.get_session_stats(st.session_state.chat_history)
-            
-            st.metric("Questions", stats.get('total_questions', 0))
-            st.metric("Avg Response Time", f"{stats.get('avg_response_time', 0):.1f}s")
-            
-            # Count Lambda-enhanced responses
-            lambda_enhanced = sum(1 for msg in st.session_state.chat_history 
-                                if msg.get('lambda_enhanced', False))
-            if lambda_enhanced > 0:
-                st.metric("Lambda Enhanced", lambda_enhanced)
-            
-            if stats.get('topics_covered'):
-                st.markdown("**Topics Covered:**")
-                for topic in stats['topics_covered'][:5]:  # Show top 5
-                    st.text(f"• {topic}")
-        
-        st.markdown("---")
-        
-        # Help and tips
-        st.markdown("### 💡 Tips")
-        st.markdown("""
-        **🎯 Effective Questions:**
-        - "Explain the mechanism of action of..."
-        - "What are the side effects of..."
-        - "Compare treatment options for..."
-        - "What are the latest guidelines for..."
-        
-        **🔧 Lambda Integration:**
-        - Enable for enhanced processing
-        - Combines multiple AI models
-        - Provides richer responses
-        
-        **🎙️ Voice Tips:**
-        - Speak clearly and slowly
-        - Mention specific drug names clearly
-        - Ask one question at a time
-        """)
+            if st.session_state.session_analytics:
+                stats = st.session_state.session_analytics.get_session_stats(st.session_state.chat_history)
+                
+                st.metric("Questions", stats.get('total_questions', 0))
+                st.metric("Avg Response Time", f"{stats.get('avg_response_time', 0):.1f}s")
+                
+                # Count Lambda-enhanced responses
+                lambda_enhanced = sum(1 for msg in st.session_state.chat_history 
+                                    if msg.get('lambda_enhanced', False))
+                if lambda_enhanced > 0:
+                    st.metric("Lambda Enhanced", lambda_enhanced)
 
 @log_function_call
 def main():
     """Main application function with Lambda integration"""
-    logger.info("🚀 Starting Interactive Medical AI Coach with Lambda Integration")
+    logger.info("🚀 Starting Interactive Medical AI Coach with RAG Integration")
     
     # Initialize session state FIRST
     initialize_session_state()
@@ -946,7 +680,7 @@ def main():
     st.markdown("""
     <div class="main-header">
         <h1>🩺 Interactive Medical AI Coach</h1>
-        <p>Advanced Medical Education • Powered by AI & Lambda Integration</p>
+        <p>Advanced Medical Education • Powered by AI & RAG Integration</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -966,7 +700,7 @@ def main():
     display_enhanced_chat_history()
     
     # Input section
-    st.markdown('<div class="input-container">', unsafe_allow_html=True)
+    st.markdown("### ✍️ Ask Your Question")
     
     # Text input with conditional voice option
     audio_available = (hasattr(st.session_state, 'audio_processor') and 
@@ -999,15 +733,9 @@ def main():
     if audio_available:
         with col2:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🎙️", help="Voice Input", type="secondary"):
+            if st.button("🎙️ Voice Input", type="secondary"):
                 st.session_state.show_voice_input = not st.session_state.get('show_voice_input', False)
                 st.rerun()
-    else:
-        # Show info about audio unavailability
-        if col2:
-            with col2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.button("🎙️", help="Voice input not available in this environment", disabled=True)
     
     # Voice input section
     if st.session_state.get('show_voice_input', False):
@@ -1030,9 +758,8 @@ def main():
                 st.session_state.transcribed_text = ""
                 st.rerun()
     
-    st.markdown("</div>", unsafe_allow_html=True)
-    
     # Session controls
+    st.markdown("### 🔧 Session Controls")
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -1042,16 +769,17 @@ def main():
     
     with col2:
         if st.button("📊 Export Session"):
-            session_data = st.session_state.session_analytics.export_session(
-                st.session_state.session_id,
-                st.session_state.chat_history
-            )
-            st.download_button(
-                "📄 Download Session Report",
-                session_data,
-                f"medical_ai_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                "application/json"
-            )
+            if st.session_state.session_analytics:
+                session_data = st.session_state.session_analytics.export_session(
+                    st.session_state.session_id,
+                    st.session_state.chat_history
+                )
+                st.download_button(
+                    "📄 Download Session Report",
+                    session_data,
+                    f"medical_ai_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    "application/json"
+                )
     
     with col3:
         if st.button("🔄 New Session"):
