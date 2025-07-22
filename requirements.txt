@@ -36,13 +36,16 @@ python-dateutil>=2.8
 # JSON and Data Serialization
 orjson>=3.9
 
-# File Processing
+# File Processing and PDF handling
 openpyxl>=3.1
 PyPDF2>=3.0
+pdfplumber>=0.9.0
+pymupdf>=1.23.0
 
-# Text Processing
+# Text Processing - Basic ML libraries only (no PyTorch/CUDA)
 nltk>=3.8
 textstat>=0.7
+scikit-learn>=1.3.0
 
 # Security
 cryptography>=41.0
@@ -58,4 +61,8 @@ python-magic>=0.4
 
 # Logging and Monitoring
 loguru>=0.7
-colorlog>=6.7
+
+# NOTE: sentence-transformers REMOVED to avoid NVIDIA CUDA dependencies in Docker
+# The system will automatically use TF-IDF similarity search instead
+# For local development with semantic search, you can install sentence-transformers separately:
+# pip install sentence-transformers>=2.2.0

@@ -8,13 +8,34 @@ AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 BEDROCK_MODEL_ID = os.getenv('BEDROCK_MODEL_ID', 'anthropic.claude-3-haiku-20240307-v1:0')
-KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID', 'BDHRZZXGMQ')
-S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'wonderstorytexttoaudiofile')
+
+# S3 Document Configuration (Updated for direct document access)
+S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'jnjtraining')  # Updated to match the image
+S3_DOCUMENT_KEY = os.getenv('S3_DOCUMENT_KEY', 'etlp/J&J_2025_Workbook.pdf')  # Updated to match the image
+S3_AUDIO_BUCKET = os.getenv('S3_AUDIO_BUCKET', 'wonderstorytexttoaudiofile')  # Separate bucket for audio
+
+# Lambda Function Configuration (Updated based on AWS console)
+LAMBDA_FUNCTION_NAME = os.getenv('LAMBDA_FUNCTION_NAME', 'wonderscribeconnectVDB')
+LAMBDA_API_GATEWAY_URL = os.getenv('LAMBDA_API_GATEWAY_URL', 'https://wacnjhqh34.execute-api.us-east-1.amazonaws.com/dev/')
+LAMBDA_FUNCTION_ARN = os.getenv('LAMBDA_FUNCTION_ARN', 'arn:aws:lambda:us-east-1:546193242702:function:wonderscribeconnectVDB')
+
+# Legacy Knowledge Base Configuration (kept for backward compatibility)
+KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID', 'BDHRZZXGMQ')  # May not be used
 
 # Enhanced Medical Configuration
 CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', '0.7'))
 MAX_CONTEXT_SOURCES = int(os.getenv('MAX_CONTEXT_SOURCES', '5'))
 SESSION_TIMEOUT_MINUTES = int(os.getenv('SESSION_TIMEOUT_MINUTES', '60'))
+
+# Document Processing Configuration
+DOCUMENT_PROCESSING = {
+    'chunk_size': int(os.getenv('CHUNK_SIZE', '1000')),
+    'chunk_overlap': int(os.getenv('CHUNK_OVERLAP', '200')),
+    'similarity_threshold': float(os.getenv('SIMILARITY_THRESHOLD', '0.3')),
+    'max_chunks_per_query': int(os.getenv('MAX_CHUNKS_PER_QUERY', '5')),
+    'enable_semantic_search': os.getenv('ENABLE_SEMANTIC_SEARCH', 'true').lower() == 'true',
+    'enable_tfidf_fallback': os.getenv('ENABLE_TFIDF_FALLBACK', 'true').lower() == 'true'
+}
 
 # Therapeutic Areas Configuration for Medical AI Coach
 THERAPEUTIC_AREAS = {
@@ -201,6 +222,29 @@ THERAPEUTIC_AREAS = {
             'How to manage drug overdose?',
             'When to adjust drug dosages?'
         ]
+    },
+    'johnson_johnson': {
+        'name': 'Johnson & Johnson Focus Areas',
+        'icon': '🏥',
+        'description': 'J&J specific therapeutic areas, products, and clinical guidelines from the 2025 workbook',
+        'knowledge_base_prefix': 'jj',
+        'emergency_keywords': [
+            'adverse event reporting', 'product recall', 'safety signal',
+            'serious adverse event', 'medication error'
+        ],
+        'quick_modules': [
+            'J&J Product Portfolio',
+            'Clinical Trial Updates',
+            'Safety Monitoring',
+            'Regulatory Guidelines',
+            'Market Access'
+        ],
+        'common_questions': [
+            'What are the latest J&J product updates?',
+            'How to report adverse events for J&J products?',
+            'What are the new clinical trial results?',
+            'How to access J&J medical information?'
+        ]
     }
 }
 
@@ -228,7 +272,7 @@ MEDICAL_DISCLAIMER = """
 ⚠️ IMPORTANT MEDICAL DISCLAIMER - INTERACTIVE MEDICAL AI COACH:
 
 • This AI system is designed for medical education and training purposes only
-• Information provided is based on medical literature and current guidelines
+• Information is based on the J&J 2025 Medical Workbook and current medical literature
 • AI-generated content may contain errors and should not be relied upon as definitive medical guidance
 • All medical decisions must be made by qualified healthcare professionals
 • Always consult current clinical guidelines, drug prescribing information, and institutional protocols
@@ -237,6 +281,9 @@ MEDICAL_DISCLAIMER = """
 • Individual patient care requires comprehensive evaluation by qualified clinicians
 
 FOR EDUCATIONAL USE ONLY - NOT FOR PATIENT CARE DECISIONS
+
+Data Source: J&J 2025 Medical Workbook (J&J_2025_Workbook.pdf)
+Last Updated: January 2025
 """
 
 # Audio Configuration
@@ -249,7 +296,7 @@ AUDIO_SETTINGS = {
     'speech_rate': 1.0
 }
 
-# Knowledge Base Configuration per Therapeutic Area
+# Knowledge Base Configuration per Therapeutic Area (Legacy - may not be used)
 KNOWLEDGE_BASE_CONFIG = {
     area_key: {
         'knowledge_base_id': f"{KNOWLEDGE_BASE_ID}_{area_key}",
@@ -280,7 +327,9 @@ SYSTEM_CONFIG = {
     'max_concurrent_sessions': 50,
     'session_timeout_minutes': 60,
     'auto_save_enabled': True,
-    'performance_monitoring': True
+    'performance_monitoring': True,
+    'document_processing_enabled': True,
+    'lambda_integration_enabled': True
 }
 
 # UI Configuration
@@ -289,5 +338,7 @@ UI_CONFIG = {
     'show_confidence_scores': True,
     'enable_quick_actions': True,
     'sidebar_expanded': True,
-    'chat_history_limit': 50
+    'chat_history_limit': 50,
+    'show_document_sources': True,
+    'enable_context_display': True
 }

@@ -1,5 +1,5 @@
-# Multi-stage build for efficient Docker image
-FROM python:3.11-slim as builder
+# Simple Docker build for Medical AI Coach - No user complications
+FROM python:3.11-slim
 
 # Install system dependencies for audio processing
 RUN apt-get update && apt-get install -y \
@@ -7,10 +7,10 @@ RUN apt-get update && apt-get install -y \
     portaudio19-dev \
     python3-pyaudio \
     alsa-utils \
-    pulseaudio \
     libsndfile1 \
     ffmpeg \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -23,38 +23,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Final stage
-FROM python:3.11-slim
-
-# Install runtime dependencies for audio (minimal)
-RUN apt-get update && apt-get install -y \
-    portaudio19-dev \
-    libsndfile1 \
-    ffmpeg \
-    curl \
-    alsa-utils \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Create non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# Set working directory
-WORKDIR /app
-
-# Copy Python packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
 # Copy application files
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p data logs audio_recordings && \
-    chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
+RUN mkdir -p data logs audio_recordings exports
 
 # Set environment variables
 ENV PYTHONPATH=/app

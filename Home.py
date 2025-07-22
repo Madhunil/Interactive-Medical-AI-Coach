@@ -69,6 +69,26 @@ st.markdown("""
         margin: 0;
     }
     
+    /* Lambda Integration Status */
+    .lambda-status {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border: 2px solid #0ea5e9;
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+        text-align: center;
+    }
+    
+    .lambda-status.enabled {
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        border-color: #22c55e;
+    }
+    
+    .lambda-status.disabled {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border-color: #f59e0b;
+    }
+    
     /* Therapeutic Area Selector */
     .therapeutic-area-grid {
         display: grid;
@@ -165,6 +185,16 @@ st.markdown("""
         margin: 0.8rem 0;
         border-radius: 0 12px 12px 0;
         box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+        position: relative;
+    }
+    
+    .lambda-enhanced-message {
+        background: linear-gradient(135deg, #fdf4ff 0%, #f3e8ff 100%);
+        border-left: 4px solid #8b5cf6;
+        padding: 1.2rem;
+        margin: 0.8rem 0;
+        border-radius: 0 12px 12px 0;
+        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.1);
         position: relative;
     }
     
@@ -293,7 +323,7 @@ st.markdown("""
 
 @log_function_call
 def initialize_session_state():
-    """Initialize enhanced session state"""
+    """Initialize enhanced session state with Lambda configuration"""
     logger.debug("🔧 Initializing Streamlit session state...")
     
     # Core components with robust error handling
@@ -307,7 +337,6 @@ def initialize_session_state():
         except Exception as e:
             logger.error(f"❌ AudioProcessor initialization failed: {str(e)}")
             st.session_state.audio_processor = None
-            # Don't stop the app, continue with limited functionality
     
     if 'rag_processor' not in st.session_state:
         try:
@@ -346,7 +375,75 @@ def initialize_session_state():
     if 'show_voice_input' not in st.session_state:
         st.session_state.show_voice_input = False
     
+    # Lambda integration settings
+    if 'use_lambda_integration' not in st.session_state:
+        st.session_state.use_lambda_integration = True  # Enable by default
+    
+    if 'lambda_status' not in st.session_state:
+        st.session_state.lambda_status = None
+    
     logger.info("🎯 Session state initialization completed")
+
+@log_function_call
+def test_lambda_connection():
+    """Test Lambda function connectivity"""
+    if not st.session_state.rag_processor:
+        return False, "RAG processor not initialized"
+    
+    try:
+        # Test basic Lambda connectivity
+        test_payload = {
+            'api_Path': 'getStory',
+            'story_theme': 'medical test query',
+            'story_type': 'medical',
+            'main_character': 'Doctor',
+            'story_lang': 'English',
+            'word_count': '100'
+        }
+        
+        result = st.session_state.rag_processor.call_lambda_function(test_payload)
+        
+        if result['success']:
+            return True, "Lambda function accessible"
+        else:
+            return False, f"Lambda error: {result.get('error', 'Unknown error')}"
+            
+    except Exception as e:
+        return False, f"Lambda test failed: {str(e)}"
+
+@log_function_call
+def render_lambda_status():
+    """Render Lambda integration status"""
+    # Test Lambda connection
+    lambda_working, lambda_message = test_lambda_connection()
+    st.session_state.lambda_status = lambda_working
+    
+    status_class = "enabled" if lambda_working else "disabled"
+    status_icon = "✅" if lambda_working else "⚠️"
+    status_text = "Lambda Integration Active" if lambda_working else "Lambda Integration Limited"
+    
+    st.markdown(f"""
+    <div class="lambda-status {status_class}">
+        <h4>{status_icon} {status_text}</h4>
+        <p><strong>Function:</strong> wonderscribeconnectVDB</p>
+        <p><strong>Status:</strong> {lambda_message}</p>
+        <p><strong>API Gateway:</strong> {'Connected' if lambda_working else 'Limited'}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Lambda settings toggle
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.session_state.use_lambda_integration = st.checkbox(
+            "🔧 Use Lambda Integration for Enhanced Processing",
+            value=st.session_state.use_lambda_integration,
+            help="Enable to use Lambda function for enhanced medical query processing"
+        )
+    
+    with col2:
+        if st.button("🔄 Test Lambda"):
+            st.rerun()
 
 @log_function_call
 def render_therapeutic_area_selector():
@@ -395,10 +492,10 @@ def render_therapeutic_area_selector():
 
 @log_function_call
 def render_session_dashboard():
-    """Render session progress dashboard"""
+    """Render session progress dashboard with Lambda status"""
     st.markdown("### 📊 Current Session")
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     # Calculate session stats
     session_duration = (datetime.now() - st.session_state.session_start_time).total_seconds() / 60
@@ -425,17 +522,23 @@ def render_session_dashboard():
             st.metric("Avg Confidence", f"{confidence_score:.0f}%")
         else:
             st.metric("Avg Confidence", "N/A")
+    
+    with col5:
+        lambda_status = "Active" if st.session_state.lambda_status else "Limited"
+        lambda_color = "normal" if st.session_state.lambda_status else "inverse"
+        st.metric("Lambda Status", lambda_status)
 
 @log_function_call
 def add_message_to_chat(role, content, message_type="normal", metadata=None):
-    """Enhanced message addition with metadata"""
+    """Enhanced message addition with metadata and Lambda tracking"""
     message = {
         'role': role,
         'content': content,
         'type': message_type,
         'timestamp': time.time(),
         'therapeutic_area': st.session_state.selected_therapeutic_area,
-        'metadata': metadata or {}
+        'metadata': metadata or {},
+        'lambda_enhanced': metadata and 'lambda_used' in metadata and metadata['lambda_used']
     }
     
     st.session_state.chat_history.append(message)
@@ -450,10 +553,14 @@ def add_message_to_chat(role, content, message_type="normal", metadata=None):
 
 @log_function_call
 def display_enhanced_chat_history():
-    """Display enhanced chat history with better formatting"""
+    """Display enhanced chat history with Lambda integration indicators"""
     if not st.session_state.chat_history:
         welcome_area = st.session_state.selected_therapeutic_area
         area_info = THERAPEUTIC_AREAS.get(welcome_area, {'name': 'General Medicine', 'icon': '🩺'})
+        
+        lambda_info = ""
+        if st.session_state.use_lambda_integration and st.session_state.lambda_status:
+            lambda_info = "<br><br><strong>🔧 Lambda Integration:</strong> Enhanced processing with wonderscribeconnectVDB function enabled"
         
         st.markdown(f"""
         <div class="chat-container">
@@ -463,6 +570,7 @@ def display_enhanced_chat_history():
                 You can ask questions using text or voice input.
                 <br><br>
                 <em>💡 Tip: Try asking about specific conditions, treatments, drug mechanisms, or clinical guidelines.</em>
+                {lambda_info}
                 <br><br>
                 <strong>⚠️ Remember:</strong> This is for educational purposes only. Always follow clinical guidelines and consult healthcare professionals.
             </div>
@@ -495,21 +603,41 @@ def display_enhanced_chat_history():
                 </div>
                 '''
             elif message['role'] == 'assistant':
-                css_class = "emergency-message" if message['type'] == 'emergency' else "ai-message"
-                icon = "🚨" if message['type'] == 'emergency' else "🧠"
+                # Determine message style based on type and Lambda usage
+                if message['type'] == 'emergency':
+                    css_class = "emergency-message"
+                    icon = "🚨"
+                elif message.get('lambda_enhanced', False):
+                    css_class = "lambda-enhanced-message"
+                    icon = "🔧"
+                else:
+                    css_class = "ai-message"
+                    icon = "🧠"
                 
-                # Add confidence indicator if available
-                confidence_indicator = ""
-                if 'confidence' in message.get('metadata', {}):
+                # Add confidence and Lambda indicators
+                indicators = []
+                if 'metadata' in message and 'confidence' in message['metadata']:
                     confidence = message['metadata']['confidence']
                     if confidence < 0.7:
-                        confidence_indicator = f" • <span style='color: #f59e0b;'>⚠️ {confidence:.0%} confidence</span>"
+                        indicators.append(f"<span style='color: #f59e0b;'>⚠️ {confidence:.0%} confidence</span>")
                     else:
-                        confidence_indicator = f" • <span style='color: #22c55e;'>✅ {confidence:.0%} confidence</span>"
+                        indicators.append(f"<span style='color: #22c55e;'>✅ {confidence:.0%} confidence</span>")
+                
+                if message.get('lambda_enhanced', False):
+                    indicators.append("<span style='color: #8b5cf6;'>🔧 Lambda Enhanced</span>")
+                
+                if 'metadata' in message and 'sources' in message['metadata']:
+                    sources = message['metadata']['sources']
+                    if isinstance(sources, list) and len(sources) > 1:
+                        indicators.append(f"<span style='color: #06b6d4;'>📚 {len(sources)} sources</span>")
+                
+                indicator_text = " • ".join(indicators)
+                if indicator_text:
+                    indicator_text = " • " + indicator_text
                 
                 chat_html += f'''
                 <div class="{css_class}">
-                    <strong>{icon} AI Coach • {timestamp}{confidence_indicator}</strong><br>
+                    <strong>{icon} AI Coach • {timestamp}{indicator_text}</strong><br>
                     {message['content'].replace(chr(10), '<br>')}
                 </div>
                 '''
@@ -596,7 +724,7 @@ def process_enhanced_audio_recording():
 
 @log_function_call
 def process_enhanced_user_query(query_text):
-    """Enhanced query processing with therapeutic area context"""
+    """Enhanced query processing with Lambda integration"""
     if not query_text.strip():
         st.warning("Please provide a medical question.")
         return
@@ -608,12 +736,13 @@ def process_enhanced_user_query(query_text):
     # Add user message to chat
     add_message_to_chat('user', query_text)
     
-    # Process with enhanced AI
+    # Process with enhanced AI including Lambda integration
     with st.spinner("🧠 Analyzing your question..."):
         try:
             response_data = st.session_state.rag_processor.process_medical_query(
                 query=query_text,
-                therapeutic_area=st.session_state.selected_therapeutic_area
+                therapeutic_area=st.session_state.selected_therapeutic_area,
+                use_lambda=st.session_state.use_lambda_integration
             )
             
             if response_data['success']:
@@ -622,20 +751,36 @@ def process_enhanced_user_query(query_text):
                     'assistant', 
                     response_data['response'], 
                     message_type,
-                    {
-                        'confidence': response_data.get('confidence', 0),
-                        'sources': len(response_data.get('contexts', [])),
-                        'processing_time': response_data.get('processing_time', 0)
-                    }
+                    response_data.get('metadata', {})
                 )
                 
-                # Show sources and confidence
-                if response_data.get('contexts'):
-                    with st.expander(f"📚 Knowledge Sources ({len(response_data['contexts'])} found)"):
-                        for i, context in enumerate(response_data['contexts'], 1):
-                            st.text(f"Source {i}: {context[:200]}...")
+                # Show processing details
+                with st.expander("📊 Processing Details"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Response Details:**")
+                        st.write(f"- Confidence: {response_data.get('confidence', 0):.1%}")
+                        st.write(f"- Processing Time: {response_data.get('processing_time', 0):.2f}s")
+                        st.write(f"- Sources: {', '.join(response_data.get('sources', []))}")
+                        
+                        if response_data.get('metadata', {}).get('lambda_used'):
+                            st.write("- 🔧 Lambda Enhanced: Yes")
+                        else:
+                            st.write("- 🔧 Lambda Enhanced: No")
+                    
+                    with col2:
+                        if response_data.get('contexts'):
+                            st.write(f"**Knowledge Sources ({len(response_data['contexts'])} found):**")
+                            for i, context in enumerate(response_data['contexts'][:3], 1):
+                                st.text(f"{i}. {context[:100]}...")
+                        
+                        # Show Lambda contribution if available
+                        if response_data.get('lambda_contribution'):
+                            st.write("**Lambda Contribution:**")
+                            st.text(response_data['lambda_contribution'][:200] + "...")
                 
-                # Show confidence score
+                # Show confidence warning if needed
                 confidence = response_data.get('confidence', 0.8)
                 if confidence < 0.7:
                     st.warning(f"⚠️ Response confidence: {confidence:.1%} - Consider consulting additional resources.")
@@ -651,7 +796,7 @@ def process_enhanced_user_query(query_text):
 
 @log_function_call
 def render_sidebar():
-    """Render the enhanced sidebar with system status and controls"""
+    """Render the enhanced sidebar with Lambda integration status"""
     with st.sidebar:
         st.markdown("### 🛠️ System Status")
         
@@ -674,6 +819,15 @@ def render_sidebar():
                 st.error("❌ AWS Connection")
         except:
             st.error("❌ AWS Connection")
+        
+        # Lambda function status
+        if st.session_state.lambda_status is not None:
+            if st.session_state.lambda_status:
+                st.success("✅ Lambda Function")
+            else:
+                st.warning("⚠️ Lambda Limited")
+        else:
+            st.info("ℹ️ Lambda Testing...")
         
         # Audio system status
         try:
@@ -703,6 +857,31 @@ def render_sidebar():
         
         st.markdown("---")
         
+        # Lambda Integration Controls
+        st.markdown("### 🔧 Lambda Integration")
+        
+        if st.session_state.lambda_status:
+            st.success("wonderscribeconnectVDB: Active")
+        else:
+            st.warning("wonderscribeconnectVDB: Limited")
+        
+        st.session_state.use_lambda_integration = st.checkbox(
+            "Enable Lambda Enhancement",
+            value=st.session_state.use_lambda_integration,
+            help="Use Lambda function for enhanced processing"
+        )
+        
+        if st.button("🔄 Test Lambda", use_container_width=True):
+            with st.spinner("Testing Lambda..."):
+                lambda_working, lambda_message = test_lambda_connection()
+                st.session_state.lambda_status = lambda_working
+                if lambda_working:
+                    st.success("Lambda test successful!")
+                else:
+                    st.error(f"Lambda test failed: {lambda_message}")
+        
+        st.markdown("---")
+        
         # Quick learning modules
         st.markdown("### 📚 Quick Modules")
         if st.session_state.selected_therapeutic_area:
@@ -722,6 +901,12 @@ def render_sidebar():
             st.metric("Questions", stats.get('total_questions', 0))
             st.metric("Avg Response Time", f"{stats.get('avg_response_time', 0):.1f}s")
             
+            # Count Lambda-enhanced responses
+            lambda_enhanced = sum(1 for msg in st.session_state.chat_history 
+                                if msg.get('lambda_enhanced', False))
+            if lambda_enhanced > 0:
+                st.metric("Lambda Enhanced", lambda_enhanced)
+            
             if stats.get('topics_covered'):
                 st.markdown("**Topics Covered:**")
                 for topic in stats['topics_covered'][:5]:  # Show top 5
@@ -738,6 +923,11 @@ def render_sidebar():
         - "Compare treatment options for..."
         - "What are the latest guidelines for..."
         
+        **🔧 Lambda Integration:**
+        - Enable for enhanced processing
+        - Combines multiple AI models
+        - Provides richer responses
+        
         **🎙️ Voice Tips:**
         - Speak clearly and slowly
         - Mention specific drug names clearly
@@ -746,8 +936,8 @@ def render_sidebar():
 
 @log_function_call
 def main():
-    """Main application function"""
-    logger.info("🚀 Starting Interactive Medical AI Coach")
+    """Main application function with Lambda integration"""
+    logger.info("🚀 Starting Interactive Medical AI Coach with Lambda Integration")
     
     # Initialize session state FIRST
     initialize_session_state()
@@ -756,9 +946,12 @@ def main():
     st.markdown("""
     <div class="main-header">
         <h1>🩺 Interactive Medical AI Coach</h1>
-        <p>Advanced Medical Education • Powered by AI & Knowledge Base</p>
+        <p>Advanced Medical Education • Powered by AI & Lambda Integration</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Lambda integration status
+    render_lambda_status()
     
     # Session dashboard
     render_session_dashboard()
@@ -825,10 +1018,13 @@ def main():
                 st.session_state.transcribed_text = ""
                 st.rerun()
     
-    # Send button
+    # Send button with Lambda status indicator
     col1, col2, col3 = st.columns([2, 1, 2])
     with col2:
-        if st.button("Send 📤", type="primary", use_container_width=True):
+        lambda_indicator = "🔧" if st.session_state.use_lambda_integration and st.session_state.lambda_status else "📤"
+        button_text = f"Send {lambda_indicator}"
+        
+        if st.button(button_text, type="primary", use_container_width=True):
             if user_input.strip():
                 process_enhanced_user_query(user_input.strip())
                 st.session_state.transcribed_text = ""
